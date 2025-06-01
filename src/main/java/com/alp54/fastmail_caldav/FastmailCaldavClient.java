@@ -1,29 +1,36 @@
 package com.alp54.fastmail_caldav;
 
 import java.io.IOException;
+import java.io.StringReader;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.time.Instant; // Added for conversion
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
-import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.TemporalAccessor;
-import java.time.Instant; // Added for conversion
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.io.StringReader;
-import java.text.ParseException; // For RRule parsing
-import java.text.SimpleDateFormat; // For all-day date parsing
+
+import org.apache.http.auth.AuthScope;
+import org.apache.http.auth.UsernamePasswordCredentials;
+import org.apache.http.client.CredentialsProvider;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.entity.StringEntity;
+import org.apache.http.impl.client.BasicCredentialsProvider;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import org.apache.jackrabbit.webdav.client.methods.HttpReport;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
 
 import net.fortuna.ical4j.data.CalendarBuilder;
 import net.fortuna.ical4j.data.ParserException;
 import net.fortuna.ical4j.model.Calendar;
-// import net.fortuna.ical4j.model.Component; // Replaced by fully qualified name
-import net.fortuna.ical4j.model.Date; // Explicit import for ical4j.model.Date
-import net.fortuna.ical4j.model.DateTime; // Explicit import for ical4j.model.DateTime
 import net.fortuna.ical4j.model.Period;
 import net.fortuna.ical4j.model.PeriodList;
 // import net.fortuna.ical4j.model.Property; // Will use specific property classes
@@ -36,22 +43,6 @@ import net.fortuna.ical4j.model.property.Location;
 import net.fortuna.ical4j.model.property.RRule;
 import net.fortuna.ical4j.model.property.Summary;
 import net.fortuna.ical4j.model.property.Uid;
-
-import org.apache.http.auth.AuthScope;
-import org.apache.http.auth.UsernamePasswordCredentials;
-import org.apache.http.client.CredentialsProvider;
-import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.methods.HttpPut;
-import org.apache.http.client.methods.HttpRequestBase;
-import org.apache.http.entity.StringEntity;
-import org.apache.http.impl.client.BasicCredentialsProvider;
-import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClients;
-import org.apache.http.util.EntityUtils;
-import org.apache.jackrabbit.webdav.client.methods.HttpReport;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 @Component
 public class FastmailCaldavClient {
@@ -178,6 +169,171 @@ public class FastmailCaldavClient {
                 }
                 return events;
         }
+
+        /**
+         * Creates a new calendar event
+         *
+         * @param summary   The summary of the event
+         * @param date      The date of the event in YYYY-MM-DD format
+         * @param startTime The start time of the event in HHmm format
+         * @param endTime   The end time of the event in HHmm format
+         * @return The location of the created event
+         * @throws IOException
+         * @throws URISyntaxException
+         */
+        @Tool(name = "createCalendarEvent", description = "Creates a new calendar event")
+        public String createCalendarEvent(String summary, String date, String startTime, String endTime)
+                        throws IOException, URISyntaxException {
+                CredentialsProvider credsProvider = new BasicCredentialsProvider();
+                credsProvider.setCredentials(
+                                AuthScope.ANY,
+                                new UsernamePasswordCredentials(username, password));
+
+                try (CloseableHttpClient httpclient = HttpClients.custom()
+                                .setDefaultCredentialsProvider(credsProvider)
+                                .build()) {
+
+                        String startDateTime = toIcalFormat(date, startTime);
+                        String endDateTime = toIcalFormat(date, endTime);
+
+                        // Create iCalendar content
+                        String icalContent = "BEGIN:VCALENDAR\n" +
+                                        "VERSION:2.0\n" +
+                                        "PRODID:-//Fastmail//Fastmail Caldav Client//EN\n" +
+                                        "BEGIN:VEVENT\n" +
+                                        "UID:" + java.util.UUID.randomUUID().toString() + "@fastmail.com\n" +
+                                        "DTSTAMP:"
+                                        + java.time.ZonedDateTime.now()
+                                                        .format(java.time.format.DateTimeFormatter
+                                                                        .ofPattern("yyyyMMdd'T'HHmmss'Z'"))
+                                        + "\n" +
+                                        "DTSTART:" + startDateTime + "\n" +
+                                        "DTEND:" + endDateTime + "\n" +
+                                        "SUMMARY:" + summary + "\n" +
+                                        "END:VEVENT\n" +
+                                        "END:VCALENDAR";
+
+                        // Generate unique event URL
+                        String eventUid = java.util.UUID.randomUUID().toString();
+                        String eventPath = calendarPath;
+                        if (!eventPath.endsWith("/")) {
+                                eventPath += "/";
+                        }
+                        eventPath += eventUid + ".ics";
+
+                        URI uri = new URI(caldavUrl + eventPath);
+                        HttpPut put = new HttpPut(uri);
+                        put.setHeader("Content-Type", "text/calendar; charset=utf-8");
+                        put.setEntity(new StringEntity(icalContent, "UTF-8"));
+
+                        try (CloseableHttpResponse response = httpclient.execute(put)) {
+                                int statusCode = response.getStatusLine().getStatusCode();
+                                if (statusCode >= 200 && statusCode < 300) {
+                                        // Event created successfully
+                                        return uri.toString();
+                                } else {
+                                        // Handle error
+                                        String responseBody = EntityUtils.toString(response.getEntity());
+                                        throw new IOException(
+                                                        "Failed to create event: " + statusCode + " - " + responseBody);
+                                }
+                        }
+                }
+        }
+
+        /**
+         * Updates an existing calendar event
+         *
+         * @param eventUrl  The URL of the event to update
+         * @param summary   The new summary of the event
+         * @param date      The date of the event in YYYY-MM-DD format
+         * @param startTime The new start time of the event in HHmm format
+         * @param endTime   The new end time of the event in HHmm format
+         * @return True if the event was updated successfully, false otherwise
+         * @throws IOException
+         * @throws URISyntaxException
+         */
+        @Tool(name = "updateCalendarEvent", description = "Updates an existing calendar event")
+        public boolean updateCalendarEvent(String eventUrl, String summary, String date, String startTime,
+                        String endTime)
+                        throws IOException, URISyntaxException {
+                CredentialsProvider credsProvider = new BasicCredentialsProvider();
+                credsProvider.setCredentials(
+                                AuthScope.ANY,
+                                new UsernamePasswordCredentials(username, password));
+
+                try (CloseableHttpClient httpclient = HttpClients.custom()
+                                .setDefaultCredentialsProvider(credsProvider)
+                                .build()) {
+
+                        String startDateTime = toIcalFormat(date, startTime);
+                        String endDateTime = toIcalFormat(date, endTime);
+
+                        // Create iCalendar content
+                        String icalContent = "BEGIN:VCALENDAR\n" +
+                                        "VERSION:2.0\n" +
+                                        "PRODID:-//Fastmail//Fastmail Caldav Client//EN\n" +
+                                        "BEGIN:VEVENT\n" +
+                                        "DTSTAMP:"
+                                        + java.time.ZonedDateTime.now()
+                                                        .format(java.time.format.DateTimeFormatter
+                                                                        .ofPattern("yyyyMMdd'T'HHmmss'Z'"))
+                                        + "\n" +
+                                        "DTSTART:" + startDateTime + "\n" +
+                                        "DTEND:" + endDateTime + "\n" +
+                                        "SUMMARY:" + summary + "\n" +
+                                        "END:VEVENT\n" +
+                                        "END:VCALENDAR";
+
+                        // Update the event
+                        HttpPut put = new HttpPut(eventUrl);
+                        put.setHeader("Content-Type", "text/calendar; charset=utf-8");
+                        put.setEntity(new StringEntity(icalContent, "UTF-8"));
+
+                        try (CloseableHttpResponse response = httpclient.execute(put)) {
+                                int statusCode = response.getStatusLine().getStatusCode();
+                                return statusCode >= 200 && statusCode < 300;
+                        }
+                }
+        }
+
+        /**
+         * Deletes a calendar event by UID.
+         *
+         * @param uid The UID of the event to delete
+         * @return True if the event was deleted successfully, false otherwise
+         * @throws IOException
+         * @throws URISyntaxException
+         */
+        @Tool(name = "deleteCalendarEvent", description = "Deletes a calendar event by UID")
+        public boolean deleteCalendarEvent(String uid) throws IOException, URISyntaxException {
+                // Find the event URL by UID
+                String eventUrl = findEventUrlByUid(uid);
+                if (eventUrl == null) {
+                        System.err.println("Event with UID " + uid + " not found.");
+                        return false;
+                }
+
+                CredentialsProvider credsProvider = new BasicCredentialsProvider();
+                credsProvider.setCredentials(
+                                AuthScope.ANY,
+                                new UsernamePasswordCredentials(username, password));
+
+                try (CloseableHttpClient httpclient = HttpClients.custom()
+                                .setDefaultCredentialsProvider(credsProvider)
+                                .build()) {
+
+                        org.apache.http.client.methods.HttpDelete delete = new org.apache.http.client.methods.HttpDelete(
+                                        eventUrl);
+                        try (CloseableHttpResponse response = httpclient.execute(delete)) {
+                                int statusCode = response.getStatusLine().getStatusCode();
+                                return statusCode >= 200 && statusCode < 300;
+                        }
+                }
+        }
+
+        // formatICalDateTime and formatICalDateTimeExtended are now removed / replaced
+        // by formatIcal4jDate helper and ical4j direct usage.
 
         private List<String> parseEventsToJson(String xml, LocalDate queryDate)
                         throws javax.xml.parsers.ParserConfigurationException, org.xml.sax.SAXException, IOException {
@@ -431,9 +587,6 @@ public class FastmailCaldavClient {
                 return eventJsons;
         }
 
-        // formatICalDateTime and formatICalDateTimeExtended are now removed / replaced
-        // by formatIcal4jDate helper and ical4j direct usage.
-
         /**
          * Converts a local date and time to iCalendar format
          *
@@ -463,168 +616,6 @@ public class FastmailCaldavClient {
                 return DateTimeFormatter.ofPattern("yyyyMMdd'T'HHmmss'Z'")
                                 .withZone(ZoneId.of("UTC"))
                                 .format(zonedDateTime);
-        }
-
-        /**
-         * Creates a new calendar event
-         *
-         * @param summary   The summary of the event
-         * @param date      The date of the event in YYYY-MM-DD format
-         * @param startTime The start time of the event in HHmm format
-         * @param endTime   The end time of the event in HHmm format
-         * @return The location of the created event
-         * @throws IOException
-         * @throws URISyntaxException
-         */
-        @Tool(name = "createCalendarEvent", description = "Creates a new calendar event")
-        public String createCalendarEvent(String summary, String date, String startTime, String endTime)
-                        throws IOException, URISyntaxException {
-                CredentialsProvider credsProvider = new BasicCredentialsProvider();
-                credsProvider.setCredentials(
-                                AuthScope.ANY,
-                                new UsernamePasswordCredentials(username, password));
-
-                try (CloseableHttpClient httpclient = HttpClients.custom()
-                                .setDefaultCredentialsProvider(credsProvider)
-                                .build()) {
-
-                        String startDateTime = toIcalFormat(date, startTime);
-                        String endDateTime = toIcalFormat(date, endTime);
-
-                        // Create iCalendar content
-                        String icalContent = "BEGIN:VCALENDAR\n" +
-                                        "VERSION:2.0\n" +
-                                        "PRODID:-//Fastmail//Fastmail Caldav Client//EN\n" +
-                                        "BEGIN:VEVENT\n" +
-                                        "UID:" + java.util.UUID.randomUUID().toString() + "@fastmail.com\n" +
-                                        "DTSTAMP:"
-                                        + java.time.ZonedDateTime.now()
-                                                        .format(java.time.format.DateTimeFormatter
-                                                                        .ofPattern("yyyyMMdd'T'HHmmss'Z'"))
-                                        + "\n" +
-                                        "DTSTART:" + startDateTime + "\n" +
-                                        "DTEND:" + endDateTime + "\n" +
-                                        "SUMMARY:" + summary + "\n" +
-                                        "END:VEVENT\n" +
-                                        "END:VCALENDAR";
-
-                        // Generate unique event URL
-                        String eventUid = java.util.UUID.randomUUID().toString();
-                        String eventPath = calendarPath;
-                        if (!eventPath.endsWith("/")) {
-                                eventPath += "/";
-                        }
-                        eventPath += eventUid + ".ics";
-
-                        URI uri = new URI(caldavUrl + eventPath);
-                        HttpPut put = new HttpPut(uri);
-                        put.setHeader("Content-Type", "text/calendar; charset=utf-8");
-                        put.setEntity(new StringEntity(icalContent, "UTF-8"));
-
-                        try (CloseableHttpResponse response = httpclient.execute(put)) {
-                                int statusCode = response.getStatusLine().getStatusCode();
-                                if (statusCode >= 200 && statusCode < 300) {
-                                        // Event created successfully
-                                        return uri.toString();
-                                } else {
-                                        // Handle error
-                                        String responseBody = EntityUtils.toString(response.getEntity());
-                                        throw new IOException(
-                                                        "Failed to create event: " + statusCode + " - " + responseBody);
-                                }
-                        }
-                }
-        }
-
-        /**
-         * Updates an existing calendar event
-         *
-         * @param eventUrl  The URL of the event to update
-         * @param summary   The new summary of the event
-         * @param date      The date of the event in YYYY-MM-DD format
-         * @param startTime The new start time of the event in HHmm format
-         * @param endTime   The new end time of the event in HHmm format
-         * @return True if the event was updated successfully, false otherwise
-         * @throws IOException
-         * @throws URISyntaxException
-         */
-        @Tool(name = "updateCalendarEvent", description = "Updates an existing calendar event")
-        public boolean updateCalendarEvent(String eventUrl, String summary, String date, String startTime,
-                        String endTime)
-                        throws IOException, URISyntaxException {
-                CredentialsProvider credsProvider = new BasicCredentialsProvider();
-                credsProvider.setCredentials(
-                                AuthScope.ANY,
-                                new UsernamePasswordCredentials(username, password));
-
-                try (CloseableHttpClient httpclient = HttpClients.custom()
-                                .setDefaultCredentialsProvider(credsProvider)
-                                .build()) {
-
-                        String startDateTime = toIcalFormat(date, startTime);
-                        String endDateTime = toIcalFormat(date, endTime);
-
-                        // Create iCalendar content
-                        String icalContent = "BEGIN:VCALENDAR\n" +
-                                        "VERSION:2.0\n" +
-                                        "PRODID:-//Fastmail//Fastmail Caldav Client//EN\n" +
-                                        "BEGIN:VEVENT\n" +
-                                        "DTSTAMP:"
-                                        + java.time.ZonedDateTime.now()
-                                                        .format(java.time.format.DateTimeFormatter
-                                                                        .ofPattern("yyyyMMdd'T'HHmmss'Z'"))
-                                        + "\n" +
-                                        "DTSTART:" + startDateTime + "\n" +
-                                        "DTEND:" + endDateTime + "\n" +
-                                        "SUMMARY:" + summary + "\n" +
-                                        "END:VEVENT\n" +
-                                        "END:VCALENDAR";
-
-                        // Update the event
-                        HttpPut put = new HttpPut(eventUrl);
-                        put.setHeader("Content-Type", "text/calendar; charset=utf-8");
-                        put.setEntity(new StringEntity(icalContent, "UTF-8"));
-
-                        try (CloseableHttpResponse response = httpclient.execute(put)) {
-                                int statusCode = response.getStatusLine().getStatusCode();
-                                return statusCode >= 200 && statusCode < 300;
-                        }
-                }
-        }
-
-        /**
-         * Deletes a calendar event by UID.
-         *
-         * @param uid The UID of the event to delete
-         * @return True if the event was deleted successfully, false otherwise
-         * @throws IOException
-         * @throws URISyntaxException
-         */
-        @Tool(name = "deleteCalendarEvent", description = "Deletes a calendar event by UID")
-        public boolean deleteCalendarEvent(String uid) throws IOException, URISyntaxException {
-                // Find the event URL by UID
-                String eventUrl = findEventUrlByUid(uid);
-                if (eventUrl == null) {
-                        System.err.println("Event with UID " + uid + " not found.");
-                        return false;
-                }
-
-                CredentialsProvider credsProvider = new BasicCredentialsProvider();
-                credsProvider.setCredentials(
-                                AuthScope.ANY,
-                                new UsernamePasswordCredentials(username, password));
-
-                try (CloseableHttpClient httpclient = HttpClients.custom()
-                                .setDefaultCredentialsProvider(credsProvider)
-                                .build()) {
-
-                        org.apache.http.client.methods.HttpDelete delete = new org.apache.http.client.methods.HttpDelete(
-                                        eventUrl);
-                        try (CloseableHttpResponse response = httpclient.execute(delete)) {
-                                int statusCode = response.getStatusLine().getStatusCode();
-                                return statusCode >= 200 && statusCode < 300;
-                        }
-                }
         }
 
         /**

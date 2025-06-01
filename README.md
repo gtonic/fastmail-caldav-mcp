@@ -70,12 +70,6 @@ To run the CLI command line interface, activate the `cli` Spring profile and pas
 java -Dspring.profiles.active=cli -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar get
 ```
 
-or after packaging:
-
-```sh
-java -Dspring.profiles.active=cli -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar get
-```
-
 The CLI supports the following commands and parameters:
 
 - `get [date] [title] [description]`: Retrieve calendar events filtered by optional date, title, or description.
