@@ -1,0 +1,10 @@
+{
+    "mcpServers": {
+        "fastmail-caldav-mcp": {
+            "disabled": false,
+            "timeout": 60,
+            "url": "http://localhost:8099/sse",
+            "transportType": "sse"
+        }
+    }
+}
