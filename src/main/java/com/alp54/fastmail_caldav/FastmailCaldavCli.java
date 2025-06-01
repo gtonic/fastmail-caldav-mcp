@@ -9,12 +9,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class FastmailCaldavCli {
 
-    private final FastmailCaldav tools;
     private final FastmailCaldavClient client;
 
     @Autowired
-    public FastmailCaldavCli(FastmailCaldav tools, FastmailCaldavClient client) {
-        this.tools = tools;
+    public FastmailCaldavCli(FastmailCaldavClient client) {
         this.client = client;
     }
 
@@ -26,16 +24,6 @@ public class FastmailCaldavCli {
         String command = args[0];
 
         switch (command) {
-            case "echo":
-                if (args.length < 2) {
-                    System.out.println("Usage: echo <message>");
-                    return;
-                }
-                String echoMessage = args[1];
-                FastmailCaldav.EchoRequest echoRequest = new FastmailCaldav.EchoRequest(echoMessage);
-                FastmailCaldav.EchoResponse echoResponse = tools.echo(echoRequest);
-                System.out.println("Echo response: " + echoResponse.echoedMessage());
-                break;
             case "getcalendarevents":
                 String date = null;
                 if (args.length >= 2) {
@@ -54,7 +42,6 @@ public class FastmailCaldavCli {
 
     private static void printUsage() {
         System.out.println("Usage:");
-        System.out.println("  echo <message>");
         System.out.println("  getcalendarevents");
     }
 
