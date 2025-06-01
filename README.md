@@ -4,11 +4,23 @@ MCP for Fastmail Calendar
 
 ## Overview
 
-This project provides a Java client for interacting with the Fastmail CalDAV API. It allows you to:
+This project provides a Java client for interacting with the Fastmail CalDAV API using the Model Context Protocol (MCP). It allows you to:
 
 - Create new calendar events
 - Update existing calendar events
 - Search for calendar events by date, title, or description
+
+## Model Context Protocol (MCP) Interface
+
+The FastmailCaldavClient class exposes several methods as MCP tools:
+
+- `getCalendarEvents`: Queries all events of the calendar
+- `getCalendarEventsByDate`: Queries all events of the calendar, filtered by date (YYYY-mm-dd)
+- `getCalendarEventsByTitleOrDescription`: Queries all events of the calendar, filtered by title or description
+- `createCalendarEvent`: Creates a new calendar event
+- `updateCalendarEvent`: Updates an existing calendar event
+
+These methods are annotated with `@Tool` and can be used as part of an MCP server.
 
 ## Features
 
@@ -34,7 +46,7 @@ fastmail-username=your-fastmail-username
 fastmail.app.password=your-fastmail-app-password
 ```
 
-### Commands
+### Commands (Cli-Mode)
 
 #### Get Calendar Events
 
@@ -67,7 +79,7 @@ java -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar updatecalendarevent "<even
 - `<date>`: The new date of the event (YYYY-mm-dd)
 - `<time>`: The new time of the event (HH:mm)
 
-## Examples
+## Examples (Cli-Mode)
 
 ### Create a New Event
 
