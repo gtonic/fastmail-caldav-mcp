@@ -46,6 +46,19 @@ fastmail-username=your-fastmail-username
 fastmail.app.password=your-fastmail-app-password
 ```
 
+### Environment Variables
+
+Alternatively, you can export the following environment variables before running the application, which will override the properties file settings:
+
+```sh
+export FASTMAIL_CALDAV_URL=https://caldav.fastmail.com
+export FASTMAIL_CALENDAR_PATH=/dav
+export FASTMAIL_USERNAME=your-fastmail-username
+export FASTMAIL_APP_PASSWORD=your-fastmail-app-password
+```
+
+This is useful for running the application in containerized or cloud environments.
+
 ### Running the Server (MCP)
 
 To run the MCP server (web API) in server mode:
@@ -116,3 +129,37 @@ This will generate a JAR file in the `target` directory.
 ## License
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Docker and Taskfile
+
+### Docker
+
+A Dockerfile is provided to containerize the application. It uses the Eclipse Temurin JRE 17 base image and copies the pre-built jar from the `target` directory. To build the Docker image, run:
+
+```sh
+docker build -t fastmail-caldav-mcp .
+```
+
+To run the Docker container:
+
+```sh
+docker run -p 8099:8080 fastmail-caldav-mcp
+```
+
+### Taskfile
+
+A `Taskfile.yml` is included to simplify common tasks related to building and cleaning the project and Docker image. It requires the `task` CLI tool to be installed (https://taskfile.dev/#/installation).
+
+The available tasks are:
+
+- `task clean`: Cleans the Maven project by running `mvn clean`.
+- `task build`: Builds the Maven project by running `mvn package -DskipTests`.
+- `task docker-build`: Builds the Docker image using the Dockerfile.
+- `task docker-clean`: Removes the Docker image named `fastmail-caldav-mcp`.
+
+You can run these tasks using the `task` command. For example, to build the project and Docker image, run:
+
+```sh
+task build
+task docker-build
+```

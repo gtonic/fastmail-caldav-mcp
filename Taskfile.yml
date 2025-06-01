@@ -1,0 +1,22 @@
+version: '3'
+
+tasks:
+  clean:
+    desc: Clean the Maven project
+    cmds:
+      - mvn clean
+
+  build:
+    desc: Build the Maven project
+    cmds:
+      - mvn package -DskipTests
+
+  docker-build:
+    desc: Build the Docker image
+    cmds:
+      - docker build -t fastmail-caldav-mcp .
+
+  docker-clean:
+    desc: Remove the Docker image
+    cmds:
+      - docker rmi fastmail-caldav-mcp || true
