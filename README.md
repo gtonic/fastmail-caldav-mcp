@@ -46,57 +46,67 @@ fastmail-username=your-fastmail-username
 fastmail.app.password=your-fastmail-app-password
 ```
 
-### Commands (Cli-Mode)
+### Running the Server (MCP)
 
-#### Get Calendar Events
+To run the MCP server (web API) in server mode:
 
 ```sh
-java -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar getcalendarevents [--date <date>] [--title <title>] [--description <description>]
+mvn spring-boot:run
 ```
 
-- `--date <date>`: Filter events by date (YYYY-mm-dd)
-- `--title <title>`: Filter events by title (case-insensitive partial match)
-- `--description <description>`: Filter events by description (case-insensitive partial match)
-
-#### Create Calendar Event
+or after packaging:
 
 ```sh
-java -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar createcalendarevent "<summary>" "<date>" "<time>"
+java -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar
 ```
 
-- `<summary>`: The summary of the event
-- `<date>`: The date of the event (YYYY-mm-dd)
-- `<time>`: The time of the event (HH:mm)
+This will start the server listening on the configured port (default 8099).
 
-#### Update Calendar Event
+### Running the CLI
+
+To run the CLI command line interface, activate the `cli` Spring profile and pass the command line arguments. For example:
 
 ```sh
-java -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar updatecalendarevent "<eventUrl>" "<summary>" "<date>" "<time>"
+java -Dspring.profiles.active=cli -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar get
 ```
 
-- `<eventUrl>`: The URL of the event to update
-- `<summary>`: The new summary of the event
-- `<date>`: The new date of the event (YYYY-mm-dd)
-- `<time>`: The new time of the event (HH:mm)
-
-## Examples (Cli-Mode)
-
-### Create a New Event
+or after packaging:
 
 ```sh
-java -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar createcalendarevent "Team Meeting" "2025-06-02" "09:00"
+java -Dspring.profiles.active=cli -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar get
 ```
 
-### Update an Existing Event
+The CLI supports the following commands and parameters:
+
+- `get [date] [title] [description]`: Retrieve calendar events filtered by optional date, title, or description.
+- `create <summary> <date:YYYY-MM-DD> <startTime:HHmm> <endTime:HHmm>`: Create a new calendar event.
+- `update <eventUrl> <summary> <date:YYYY-MM-DD> <startTime:HHmm> <endTime:HHmm>`: Update an existing calendar event.
+- `delete <uid>`: Delete a calendar event by UID.
+
+### Examples
+
+Run the CLI to get events with title "meeting":
 
 ```sh
-java -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar updatecalendarevent "https://example.com/calendar/event1.ics" "Updated Meeting" "2025-06-02" "09:30"
+java -Dspring.profiles.active=cli -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar get title=meeting
 ```
 
-### Search for Events
+Create a new event:
 
 ```sh
-java -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar getcalendarevents --title "meeting" --description "project"
+java -Dspring.profiles.active=cli -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar create "Team Meeting" 2025-06-02 0900 1000
+```
+
+Update an event:
+
+```sh
+java -Dspring.profiles.active=cli -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar update "https://example.com/calendar/event1.ics" "Updated Meeting" 2025-06-02 0930 1030
+```
+
+Delete an event:
+
+```sh
+java -Dspring.profiles.active=cli -jar target/fastmail-caldav-mcp-1.0-SNAPSHOT.jar delete <uid>
 ```
 
 ## Building
