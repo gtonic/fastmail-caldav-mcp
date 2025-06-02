@@ -181,7 +181,7 @@ public class FastmailCaldavClient {
          * @throws IOException
          * @throws URISyntaxException
          */
-        @Tool(name = "createCalendarEvent", description = "Creates a new calendar event")
+        @Tool(name = "createCalendarEvent", description = "Creates a new calendar event (date as YYYY-MM-DD, time as HHmm)")
         public String createCalendarEvent(String summary, String date, String startTime, String endTime)
                         throws IOException, URISyntaxException {
                 CredentialsProvider credsProvider = new BasicCredentialsProvider();
@@ -455,7 +455,7 @@ public class FastmailCaldavClient {
 
                         if (dtStartProperty != null && rruleProp != null && queryDate != null) {
                                 net.fortuna.ical4j.model.Date initialDtStart = dtStartProperty.getDate();
-                                Recur recur;
+                                Recur recur = null;
                                 try {
                                         recur = new Recur(rruleProp.getValue());
                                 } catch (java.text.ParseException e) {
